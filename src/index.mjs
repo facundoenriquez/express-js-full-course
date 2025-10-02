@@ -1,8 +1,27 @@
 import express from "express";
+import { query, validationResult } from "express-validator";
 const app = express();
 const PORT = process.env.PORT || 3000;
 
 app.use(express.json());
+
+const loggingMiddleware = (req, res, next) => {
+  console.log(`${req.method} ${req.url}`);
+  next();
+};
+
+const resolveIndexByUserId = (req, res, next) => {
+  const {
+    body,
+    params: { id },
+  } = req;
+  const parsedId = parseInt(id);
+  if (isNaN(parsedId)) return res.sendStatus(400);
+  const userIndex = mockUsers.findIndex((user) => user.id === parsedId);
+  if (userIndex === -1) return res.sendStatus(404);
+  req.userIndex = userIndex;
+  next();
+};
 
 const mockUsers = [
   { id: 1, username: "anson", displayName: "Anson" },
@@ -17,25 +36,36 @@ const mockUsers = [
   { id: 10, username: "jack", displayName: "Jack" },
 ];
 
-app.get("/", (req, res) => {
+app.get("/", loggingMiddleware, (req, res) => {
   res.status(201).send({ message: "Hello World" });
 });
 
-app.get("/api/users", (req, res) => {
-  const { filter, value } = req.query;
-  if (filter && value) {
-    return res
-      .status(200)
-      .send(mockUsers.filter((user) => user[filter].includes(value)));
+app.get(
+  "/api/users",
+  query("filter")
+    .isString()
+    .notEmpty()
+    .withMessage("filter must be a non-empty string")
+    .isLength({ min: 3, max: 10 })
+    .withMessage("filter must be a string between 3-10 characters"),
+  (req, res) => {
+    const result = validationResult(req);
+    if (!result.isEmpty()) {
+      return res.status(400).json({ errors: result.array() });
+    }
+    const { filter, value } = req.query;
+    if (filter && value) {
+      return res
+        .status(200)
+        .send(mockUsers.filter((user) => user[filter].includes(value)));
+    }
+    res.status(200).send(mockUsers);
   }
-  res.status(200).send(mockUsers);
-});
+);
 
-app.get("/api/users/:id", (req, res) => {
-  const parsedId = parseInt(req.params.id);
-  if (isNaN(parsedId))
-    return res.status(400).send({ error: "Invalid user ID" });
-  const user = mockUsers.find((user) => user.id === parsedId);
+app.get("/api/users/:id", resolveIndexByUserId, (req, res) => {
+  const { userIndex } = req;
+  const user = mockUsers[userIndex];
   if (!user) return res.sendStatus(404);
   res.status(200).send(user);
 });
@@ -47,29 +77,23 @@ app.post("/api/users", (req, res) => {
   res.status(201).send(newUser);
 });
 
-app.put("/api/users/:id", (req, res) => {
-  const { body, params: { id } } = req;
-  const parsedId = parseInt(id);
-  if (isNaN(parsedId)) return res.sendStatus(400);
-  const userIndex = mockUsers.findIndex((user) => user.id === parsedId);
-  if (userIndex === -1) return res.sendStatus(404);
-  mockUsers[userIndex] = { id: parsedId, ...body };
+app.put("/api/users/:id", resolveIndexByUserId, (req, res) => {
+  const { body, userIndex } = req;
+  mockUsers[userIndex] = { id: mockUsers[userIndex].id, ...body };
   res.status(200).send(mockUsers[userIndex]);
-})
+});
 
-app.patch("/api/users/:id", (req, res) => {
-  const { body, params: { id } } = req;
-  const parsedId = parseInt(id);
-  if (isNaN(parsedId)) return res.sendStatus(400);
-  const userIndex = mockUsers.findIndex((user) => user.id === parsedId);
-  if (userIndex === -1) return res.sendStatus(404);
+app.patch("/api/users/:id", resolveIndexByUserId, (req, res) => {
+  const { body, userIndex } = req;
   mockUsers[userIndex] = { ...mockUsers[userIndex], ...body };
   res.status(200).send(mockUsers[userIndex]);
 });
 
-
-
-
+app.delete("/api/users/:id", resolveIndexByUserId, (req, res) => {
+  const { userIndex } = req;
+  mockUsers.splice(userIndex, 1);
+  res.sendStatus(204);
+});
 
 app.get("/api/products", (req, res) => {
   res.status(200).send([
@@ -78,7 +102,6 @@ app.get("/api/products", (req, res) => {
     { id: 3, name: "Product C", price: 19.99 },
   ]);
 });
-
 
 app.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`);
