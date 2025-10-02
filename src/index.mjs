@@ -2,6 +2,8 @@ import express from "express";
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+app.use(express.json());
+
 const mockUsers = [
   { id: 1, username: "anson", displayName: "Anson" },
   { id: 2, username: "brad", displayName: "Brad" },
@@ -20,7 +22,6 @@ app.get("/", (req, res) => {
 });
 
 app.get("/api/users", (req, res) => {
-  console.log(req.query);
   const { filter, value } = req.query;
   if (filter && value) {
     return res
@@ -28,14 +29,6 @@ app.get("/api/users", (req, res) => {
       .send(mockUsers.filter((user) => user[filter].includes(value)));
   }
   res.status(200).send(mockUsers);
-});
-
-app.get("/api/products", (req, res) => {
-  res.status(200).send([
-    { id: 1, name: "Product A", price: 29.99 },
-    { id: 2, name: "Product B", price: 49.99 },
-    { id: 3, name: "Product C", price: 19.99 },
-  ]);
 });
 
 app.get("/api/users/:id", (req, res) => {
@@ -46,6 +39,46 @@ app.get("/api/users/:id", (req, res) => {
   if (!user) return res.sendStatus(404);
   res.status(200).send(user);
 });
+
+app.post("/api/users", (req, res) => {
+  const { body } = req;
+  const newUser = { id: mockUsers.length + 1, ...body };
+  mockUsers.push(newUser);
+  res.status(201).send(newUser);
+});
+
+app.put("/api/users/:id", (req, res) => {
+  const { body, params: { id } } = req;
+  const parsedId = parseInt(id);
+  if (isNaN(parsedId)) return res.sendStatus(400);
+  const userIndex = mockUsers.findIndex((user) => user.id === parsedId);
+  if (userIndex === -1) return res.sendStatus(404);
+  mockUsers[userIndex] = { id: parsedId, ...body };
+  res.status(200).send(mockUsers[userIndex]);
+})
+
+app.patch("/api/users/:id", (req, res) => {
+  const { body, params: { id } } = req;
+  const parsedId = parseInt(id);
+  if (isNaN(parsedId)) return res.sendStatus(400);
+  const userIndex = mockUsers.findIndex((user) => user.id === parsedId);
+  if (userIndex === -1) return res.sendStatus(404);
+  mockUsers[userIndex] = { ...mockUsers[userIndex], ...body };
+  res.status(200).send(mockUsers[userIndex]);
+});
+
+
+
+
+
+app.get("/api/products", (req, res) => {
+  res.status(200).send([
+    { id: 1, name: "Product A", price: 29.99 },
+    { id: 2, name: "Product B", price: 49.99 },
+    { id: 3, name: "Product C", price: 19.99 },
+  ]);
+});
+
 
 app.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`);
