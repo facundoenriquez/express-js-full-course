@@ -1,5 +1,14 @@
 import express from "express";
-import { query, validationResult } from "express-validator";
+import {
+  body,
+  validationResult,
+  matchedData,
+  checkSchema,
+} from "express-validator";
+import {
+  createUserValidationSchema,
+  getUsersValidationSchema,
+} from "./utils/validationSchemas.js";
 const app = express();
 const PORT = process.env.PORT || 3000;
 
@@ -12,7 +21,6 @@ const loggingMiddleware = (req, res, next) => {
 
 const resolveIndexByUserId = (req, res, next) => {
   const {
-    body,
     params: { id },
   } = req;
   const parsedId = parseInt(id);
@@ -40,28 +48,19 @@ app.get("/", loggingMiddleware, (req, res) => {
   res.status(201).send({ message: "Hello World" });
 });
 
-app.get(
-  "/api/users",
-  query("filter")
-    .isString()
-    .notEmpty()
-    .withMessage("filter must be a non-empty string")
-    .isLength({ min: 3, max: 10 })
-    .withMessage("filter must be a string between 3-10 characters"),
-  (req, res) => {
-    const result = validationResult(req);
-    if (!result.isEmpty()) {
-      return res.status(400).json({ errors: result.array() });
-    }
-    const { filter, value } = req.query;
-    if (filter && value) {
-      return res
-        .status(200)
-        .send(mockUsers.filter((user) => user[filter].includes(value)));
-    }
-    res.status(200).send(mockUsers);
+app.get("/api/users", checkSchema(getUsersValidationSchema), (req, res) => {
+  const result = validationResult(req);
+  if (!result.isEmpty()) {
+    return res.status(400).json({ errors: result.array() });
   }
-);
+  const { filter, value } = req.query;
+  if (filter && value) {
+    return res
+      .status(200)
+      .send(mockUsers.filter((user) => user[filter].includes(value)));
+  }
+  res.status(200).send(mockUsers);
+});
 
 app.get("/api/users/:id", resolveIndexByUserId, (req, res) => {
   const { userIndex } = req;
@@ -70,18 +69,39 @@ app.get("/api/users/:id", resolveIndexByUserId, (req, res) => {
   res.status(200).send(user);
 });
 
-app.post("/api/users", (req, res) => {
-  const { body } = req;
-  const newUser = { id: mockUsers.length + 1, ...body };
+app.post("/api/users", checkSchema(createUserValidationSchema), (req, res) => {
+  const result = validationResult(req);
+  if (!result.isEmpty())
+    return res.status(400).json({ errors: result.array() });
+  const data = matchedData(req);
+  const newUser = { id: mockUsers.length + 1, ...data };
   mockUsers.push(newUser);
   res.status(201).send(newUser);
 });
 
-app.put("/api/users/:id", resolveIndexByUserId, (req, res) => {
-  const { body, userIndex } = req;
-  mockUsers[userIndex] = { id: mockUsers[userIndex].id, ...body };
-  res.status(200).send(mockUsers[userIndex]);
-});
+app.put(
+  "/api/users/:id",
+  resolveIndexByUserId,
+  [
+    body("username")
+      .notEmpty()
+      .withMessage("Username cannot be empty")
+      .isLength({ min: 3, max: 20 })
+      .withMessage("Username must be between 3-20 characters")
+      .isString()
+      .withMessage("Username must be a string"),
+    body("displayName").notEmpty(),
+  ],
+  (req, res) => {
+    const result = validationResult(req);
+    if (!result.isEmpty())
+      return res.status(400).json({ errors: result.array() });
+    const data = matchedData(req);
+    const { userIndex } = req;
+    mockUsers[userIndex] = { id: mockUsers[userIndex].id, ...data };
+    res.status(200).send(mockUsers[userIndex]);
+  }
+);
 
 app.patch("/api/users/:id", resolveIndexByUserId, (req, res) => {
   const { body, userIndex } = req;
