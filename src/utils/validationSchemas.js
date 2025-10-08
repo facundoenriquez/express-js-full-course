@@ -19,7 +19,7 @@ export const createUserValidationSchema = {
 export const getUsersValidationSchema = {
   filter: {
     isString: { errorMessage: "filter must be a string" },
-    nonEmpty: { errorMessage: "filter cannot be empty" },
+    notEmpty: { errorMessage: "filter cannot be empty" },
     isLength: {
       options: { min: 3, max: 10 },
       errorMessage: "filter must be a string between 3-10 characters",
